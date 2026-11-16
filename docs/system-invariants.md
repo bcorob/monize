@@ -59,6 +59,7 @@ implied.
 | INV-IMPORT-001 | At most one pending or running MNY import per user | enforced |
 | INV-IMPORT-002 | A retry never double-imports | partial |
 | INV-IMPORT-003 | A category collision does not abort an import | enforced |
+| INV-IMPORT-004 | A possible duplicate is never written without the person's decision | enforced |
 | INV-BANKSYNC-001 | A bank transaction is imported into a Monize account at most once | partial |
 | INV-BANKSYNC-002 | Bank sync provider secrets never leave the server | enforced |
 | INV-BANKSYNC-003 | A synced row is written in the Monize account's currency or not at all | enforced |
@@ -416,6 +417,39 @@ entry named only `import.service.ts` while it was `unenforced`; the 2026-10 audi
 (A26-L15) found the MNY writer had the same gap after the CSV path was fixed, so
 the enforcement above lists every path.
 
+### INV-IMPORT-004 -- a possible duplicate is never written without the person's decision
+
+```text
+Statement           An incoming bank sync, CSV, QIF or OFX row that pairs with a
+                    transaction already in the destination account (same
+                    amount, dates at most 3 days apart, one to one) is written
+                    only by a decision about that pair: import anyway or delete
+                    the existing one and import. Without one it is held (bank
+                    sync) or kept (file), and a decision about a pair other than
+                    the one shown writes nothing.
+Source of truth     transactions, bank_sync_imported_transactions,
+                    bank_sync_accounts.held_duplicate_count
+Enforcement         matchPossibleDuplicates / loadDuplicateCandidates
+                    (backend/src/import-preview/possible-duplicates.ts), called by
+                    the preview and inside the write transaction of
+                    BankSyncWriterService.write and
+                    ImportService.importParsedTransactions; the existing rows a
+                    decision names are row-locked and re-paired before the
+                    check. Bank sync: planFingerprint covers the pairs, and
+                    merge/keep/replace need it (400 otherwise). File: the
+                    decisions are re-checked against the pairs (409).
+Concurrency scope   account
+Retry semantics     A refused decision wrote nothing; preview or check again.
+Failure response    409 (pair changed), 400 (decision not allowed or not a pair)
+Required tests      Unit: possible-duplicates.spec.ts, bank-sync-writer and
+                    import.service specs. Integration: bank-sync.integration.spec.ts
+                    "possible duplicates", import-duplicates.integration.spec.ts.
+Status              enforced
+```
+
+The specification is `docs/specs/import-duplicate-review.md`. Not covered: the
+Microsoft Money and multi-account QIF imports, and investment rows.
+
 ## Bank sync
 
 The specification is `docs/specs/bank-sync.md`.
@@ -522,12 +556,13 @@ Status              enforced
 
 ```text
 Statement           A bank account that needs its preview (linked, and
-                    last_success_at NULL after a link or cut-off change) is
+                    last_success_at NULL after a link or cut-off change, or
+                    possible duplicates held back by the last write) is
                     imported only by the single-account sync the user confirms
                     from the preview; the daily sync and the sync-all route skip
                     it.
 Source of truth     bank_sync_accounts.account_id, sync_from_date,
-                    last_success_at
+                    last_success_at, held_duplicate_count
 Enforcement         One predicate, bankAccountNeedsPreview, read by the account
                     view, BankSyncService.syncConnection and the daily cron;
                     linkAccount clears last_success_at on every link or cut-off
@@ -1702,6 +1737,12 @@ Enforcement         portfolio-calculation.service.ts has always multiplied
                     the assistant's cash-flow forecast history and income
                     patterns (ai/forecast/forecast-aggregator.service.ts, split
                     by day and own rate through splitByRateBasis, issue #2146).
+                    The currency detail page's reporting-currency total
+                    (currencies/currency-detail.service.ts getUsageSummary,
+                    issue #2243) groups its rows by rateBasisColumnsSql with
+                    the reader's own transfer legs and converts each part
+                    through convertRateBasis, withholding the total while any
+                    part has no rate.
 Test                investment-transaction-summary.service.spec.ts: a sale of
                     820.91 USD settled at 3.7287 reads 3,060.9271 PLN and asks
                     for no market rate; a row without a rate is converted at the
@@ -1752,7 +1793,11 @@ Test                investment-transaction-summary.service.spec.ts: a sale of
                     monthly totals, the spending insights and the forecast, on
                     PostgreSQL; forecast-aggregator.service.spec.ts "a row
                     carrying its own rate" the same in the forecast's history
-                    and income.
+                    and income. currency-detail.integration.spec.ts totals
+                    EUR 100 at the market's 1.60, EUR 100 paid from a CAD
+                    account at its own 1.50, a EUR 200 transfer that arrived as
+                    CAD 290 and EUR 40 paid as CAD 64 to one CAD 664 (the
+                    market rate on every row reads 704), on PostgreSQL.
 Scope               Not the portfolio period result's flows, which convert each
                     row at the market rate on its own day by design
                     (docs/specs/portfolio-period-result.md sections 2 and 10.2,
