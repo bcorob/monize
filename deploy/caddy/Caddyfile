@@ -2,8 +2,12 @@
 	tls {
 		dns route53 {
 			hosted_zone_id {$CADDY_ROUTE53_HOSTED_ZONE_ID}
+			wait_for_route53_sync true
+			skip_route53_sync_on_delete false
 		}
 		resolvers 1.1.1.1 8.8.8.8
+		propagation_delay 5m
+		propagation_timeout 5m
 	}
 
 	reverse_proxy frontend:{$FRONTEND_PORT:3000}
