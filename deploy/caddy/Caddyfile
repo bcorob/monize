@@ -1,0 +1,10 @@
+{$CADDY_DOMAIN} {
+	tls {
+		dns route53 {
+			hosted_zone_id {$CADDY_ROUTE53_HOSTED_ZONE_ID}
+		}
+		resolvers 1.1.1.1 8.8.8.8
+	}
+
+	reverse_proxy frontend:{$FRONTEND_PORT:3000}
+}

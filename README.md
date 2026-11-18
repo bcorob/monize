@@ -567,8 +567,10 @@ cookies, so signing in fails. Remove the setting once Monize is served over
 HTTPS.
 
 Running Monize behind a reverse proxy that serves HTTPS, such as
-[Traefik](https://traefik.io/traefik/), is recommended, but setting one up is
-outside the scope of this documentation.
+[Caddy](https://caddyserver.com/) or [Traefik](https://traefik.io/traefik/), is
+recommended. For automatic certificates using AWS Route 53 DNS validation,
+including LAN-only deployments, use the `docker-compose.caddy.yml` overlay; see
+[Caddy HTTPS setup](deploy/caddy/README.md).
 
 ### Try It with Demo Data
 
