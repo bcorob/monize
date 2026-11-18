@@ -168,7 +168,7 @@ Highlights of the recent releases. Every version has full notes in [`docs/releas
 
 ### Multi-Currency Support
 - 44 currencies with built-in symbol and formatting metadata (USD, CAD, EUR, GBP, JPY, CHF, AUD, CNY and more), created on demand rather than pre-seeded
-- Daily exchange rate updates from an ordered chain of providers (Frankfurter, then Yahoo Finance, by default), a rate history for each currency, and a Fill gaps button for missing dates
+- Daily exchange rate updates from Frankfurter's central-bank rates (with Yahoo Finance as the fallback), a rate history for each currency, and a Fill gaps button for missing dates
 - Cryptocurrencies alongside fiat currencies, priced from a Yahoo pair such as `BTC-EUR` and refreshed on weekends too
 - Automatic currency conversion for reporting: reports, budgets and cost basis convert each amount at the rate for its own date, and name the currency when a rate is missing
 - Per-account currency settings
@@ -532,6 +532,9 @@ cp .env.example .env
    - `JWT_SECRET` - generate with `openssl rand -base64 32`
    - `ENCRYPTION_KEY` - generate with `openssl rand -hex 32`
    - `PUBLIC_APP_URL` - your public frontend URL
+   - `DISABLE_HTTPS_HEADERS=true` - required whenever Monize is reached over
+     plain `http://`, as in the `http://localhost:3001` address below (see
+     [Plain HTTP](#plain-http))
    - OIDC settings (optional) for SSO authentication
 
 4. Start the application:
@@ -545,6 +548,27 @@ docker compose -f docker-compose.dev.yml up -d
 5. Access the application:
    - Frontend: http://localhost:3001
    - Backend API: http://localhost:3000
+
+### Plain HTTP
+
+`DISABLE_HTTPS_HEADERS` is required whenever Monize is reached over plain
+`http://`, including the default `http://localhost:3001`. It defaults to `true`
+in `docker-compose.dev.yml` but to `false` in `docker-compose.prod.yml` and
+`docker-compose.ha.yml`, so for those stacks add it to `.env`:
+
+```bash
+DISABLE_HTTPS_HEADERS=true
+```
+
+Without it, Monize sends HSTS and COOP headers and `Secure` cookies that only
+work over HTTPS: the app shows an "HTTPS Required" banner, and when it is reached
+by anything other than `localhost` the browser will not keep the sign-in
+cookies, so signing in fails. Remove the setting once Monize is served over
+HTTPS.
+
+Running Monize behind a reverse proxy that serves HTTPS, such as
+[Traefik](https://traefik.io/traefik/), is recommended, but setting one up is
+outside the scope of this documentation.
 
 ### Try It with Demo Data
 
@@ -645,14 +669,14 @@ npm run dev
 | `AI_DEFAULT_API_KEY` | System-wide AI API key | - |
 | `AI_DEFAULT_BASE_URL` | Base URL for Ollama or compatible endpoints | - |
 | `AI_PRIVATE_BASE_URL_ALLOWLIST` | Comma-separated `host` or `host:port` private addresses a non-admin user's Ollama or OpenAI-compatible provider may use. Without an entry, only an admin can point a provider at a private or local address | - |
-| `AI_QUERY_MAX_ITERATIONS` | Analysis steps per AI Assistant question, centrally managed provider only | `5` |
-| `AI_QUERY_MAX_TOOL_CALLS` | Data lookups per question, centrally managed provider only | `15` |
+| `AI_QUERY_MAX_ITERATIONS` | Analysis steps per AI Assistant question, centrally managed provider only | `10` |
+| `AI_QUERY_MAX_TOOL_CALLS` | Data lookups per question, centrally managed provider only | `20` |
 | `AI_QUERY_TIMEOUT_MINUTES` | Wall-clock minutes per question, centrally managed provider only | `20` |
 | `AI_QUERY_MAX_INPUT_TOKENS` | Cumulative input tokens per question, centrally managed provider only | `200000` |
 | `AI_QUERY_MAX_TOOL_RESULT_CHARS` | Characters kept from one tool result, centrally managed provider only | `50000` |
 | `JWT_EXPIRATION` | JWT token expiration time | `15m` |
 | `REMEMBER_ME_DAYS` | Duration for "Remember Me" sessions (days) | `30` |
-| `DISABLE_HTTPS_HEADERS` | Disable HSTS and COOP headers for plain HTTP | `false` |
+| `DISABLE_HTTPS_HEADERS` | Disable HSTS and COOP headers and the `Secure` cookie flag. Required (`true`) when Monize is reached over plain HTTP (see [Plain HTTP](#plain-http)) | `false` |
 | `DEMO_MODE` | Enable demo mode with sample data | `false` |
 | `BACKUP_CONTAINER_DIR` | Container folder automatic backups are written to (each user gets a `<ab>/<cd>/<user-id>/` folder underneath it) | `/data/backups` |
 | `BACKUP_HOST_DIR` | Host folder mapped to `BACKUP_CONTAINER_DIR` by docker-compose | `./monize/backups` |
@@ -674,6 +698,7 @@ reach them.
 ```bash
 cp .env.example .env
 # Edit .env: set NODE_ENV=production, strong passwords, your domain, etc.
+# Serving over plain http://? Also set DISABLE_HTTPS_HEADERS=true (see Plain HTTP)
 ```
 
 2. Build and start:
@@ -711,8 +736,10 @@ installed for the current Windows account without administrator rights.
   [latest release](https://github.com/kenlasko/monize/releases/latest). A
   beta built from `main` is the one
   [prerelease](https://github.com/kenlasko/monize/releases) named
-  "Windows beta". The installer is not code-signed yet, so SmartScreen asks
-  for confirmation.
+  "Windows beta". Until SignPath Foundation issues its certificate, the
+  installer is signed with a test certificate Windows does not trust, so
+  SmartScreen asks for confirmation. See the
+  [code signing policy](#code-signing-policy).
 - **Reachable from that PC only.** Everything binds `127.0.0.1`: no phone,
   no other computer, no email (there are no SMTP settings), no OIDC. The
   [Windows guide](https://www.monize.net/docs/windows#what-the-windows-app-cannot-do)
@@ -796,6 +823,27 @@ Main tables:
 - Admin role required for user management operations
 - Always use HTTPS in production
 - Generate strong JWT secrets (`openssl rand -base64 32`)
+
+## Code Signing Policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io),
+certificate by [SignPath Foundation](https://signpath.org).
+
+- **What is signed:** `Monize.exe` and the installer,
+  `Monize-Setup-<version>.exe`, of Monize for Windows. They are built from
+  this repository by its GitHub Actions workflow and signed there through
+  SignPath; nothing built anywhere else is signed. Third-party files in
+  the installer, such as Electron's and PostgreSQL's, keep their own
+  publishers' signatures or none.
+- **Until SignPath Foundation issues the certificate**, builds are signed
+  with a test certificate that Windows does not trust.
+- **Committers and reviewers:** [kenlasko](https://github.com/kenlasko).
+  Changes from anyone else reach `main` only through a pull request that a
+  committer has reviewed.
+- **Approvers:** [kenlasko](https://github.com/kenlasko). Every request to sign
+  with the SignPath Foundation certificate waits for an approver.
+- **Privacy:** [PRIVACY.md](PRIVACY.md) lists every service Monize contacts,
+  when, and what it sends.
 
 ## License
 

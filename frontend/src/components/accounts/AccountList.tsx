@@ -10,6 +10,7 @@ import { Institution } from '@/types/institution';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { accountsApi } from '@/lib/accounts';
 import { invalidateBalanceCaches } from '@/lib/apiCache';
+import { moneyDecimalsForCurrency, roundMoney } from '@/lib/format';
 import { useAuthStore } from '@/store/authStore';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import toast from 'react-hot-toast';
@@ -27,10 +28,11 @@ import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import { useTableDensity } from '@/hooks/useTableDensity';
 import { useDensityPreference } from '@/store/densityStore';
 import { SortIcon } from '@/components/ui/SortIcon';
-import { MultiSelect, MultiSelectOption } from '@/components/ui/MultiSelect';
-import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { MultiSelectOption } from '@/components/ui/MultiSelect';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { AccountFilterPanel, type AccountJointFilter, type AccountNetWorthFilter, type AccountStatusFilter } from './AccountFilterPanel';
 import { formatAccountType } from '@/lib/account-utils';
-import { buildLogicalAccounts, holdingsValuationIncomplete, type LogicalAccount } from '@/lib/logical-accounts';
+import { buildLogicalAccounts, holdingsValuationIncomplete, ownBalance, type LogicalAccount } from '@/lib/logical-accounts';
 import { useMainAccountName } from '@/hooks/useMainAccountName';
 import { DensityToggleBar } from '@/components/ui/DensityToggle';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -38,8 +40,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { useViewDefault } from '@/hooks/useViewDefault';
 import { opensAccountDashboard } from '@/lib/account-detail-views';
 import { BUILT_IN_VIEW_DEFAULTS } from '@/lib/view-defaults';
-import { ChevronDownIcon, XMarkIcon } from '@heroicons/react/24/outline';
-import { SEGMENTED_GROUP_CLASS, segmentClass } from '@/components/ui/segmented-control';
+import { ChevronDownIcon } from '@heroicons/react/24/outline';
 
 type SortField = 'name' | 'type' | 'balance' | 'status' | 'lastReconciled' | 'unreconciled';
 type SortDirection = 'asc' | 'desc';
@@ -62,8 +63,10 @@ const SORT_FIELD_LABEL_KEYS = [
 
 // LocalStorage keys for filter persistence
 const STORAGE_KEYS = {
-  showFilters: 'accounts.filter.showFilters',
-  status: 'accounts.filter.status',
+  filtersExpanded: 'accounts.filter.expanded',
+  // Written only when the reader picks a status, so a browser that never
+  // chose gets the default (Active).
+  status: 'accounts.filter.statusChoice',
   netWorth: 'accounts.filter.netWorth',
   joint: 'accounts.filter.joint',
   types: 'accounts.filter.types',
@@ -72,6 +75,16 @@ const STORAGE_KEYS = {
   sortDirection: 'accounts.filter.sortDirection',
   collapsedGroups: 'accounts.filter.collapsedGroups',
 };
+
+/**
+ * Superseded keys, removed on mount. `accounts.filter.status` was written on
+ * every mount, so it cannot tell "chose All" from "never chose", and keeping it
+ * would hold every existing browser on All instead of the Active default.
+ */
+const LEGACY_KEYS = ['accounts.filter.showFilters', 'accounts.filter.status'];
+
+/** The status the list opens on: closed accounts stay out of the way. */
+export const DEFAULT_ACCOUNT_STATUS_FILTER = 'active' as const;
 
 type AccountGroupType = AccountType | "SHARED_SETTLEMENT";
 const accountGroup = (account: Account): AccountGroupType =>
@@ -123,6 +136,8 @@ interface AccountListProps {
    * account's row shows no total, like an unpriced one.
    */
   incompleteHoldingAccountIds?: ReadonlySet<string>;
+  /** Holdings account id -> how many of its holdings have a non-zero quantity. */
+  heldPositionCounts?: ReadonlyMap<string, number>;
   /**
    * True when the portfolio-summary request failed, so every brokerage market
    * value is unknown rather than a real zero. Group totals exclude and mark
@@ -221,7 +236,7 @@ const EMPTY_CONVERTED_TOTAL: ConvertedTotal = {
   excludedCount: 0,
 };
 
-export function AccountList({ accounts, institutions, brokerageMarketValues, unpricedHoldingCounts, incompleteHoldingAccountIds, portfolioFailed, defaultCurrency, convertToDefault, onEdit, onRefresh }: AccountListProps) {
+export function AccountList({ accounts, institutions, brokerageMarketValues, unpricedHoldingCounts, incompleteHoldingAccountIds, heldPositionCounts, portfolioFailed, defaultCurrency, convertToDefault, onEdit, onRefresh }: AccountListProps) {
   const t = useTranslations('accounts');
   const ts = useTranslations("sharedExpenses");
   const tc = useTranslations('common');
@@ -257,21 +272,34 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
     getStoredValue<SortDirection>(STORAGE_KEYS.sortDirection, 'asc')
   );
 
+  // Whether the filter panel is unfolded. Written only when the reader folds
+  // or unfolds it, so a browser that never chose starts with it open.
+  const [filtersExpanded, setFiltersExpanded] = useLocalStorage<boolean>(
+    STORAGE_KEYS.filtersExpanded,
+    true,
+  );
+
+  // Settings once kept under keys that nothing reads now.
+  useEffect(() => {
+    for (const key of LEGACY_KEYS) localStorage.removeItem(key);
+  }, []);
+
   // Filter state - initialize from localStorage
-  const [showFilters, _setShowFilters] = useState(() =>
-    getStoredValue<boolean>(STORAGE_KEYS.showFilters, false)
+  const [filterStatus, setFilterStatus] = useState<AccountStatusFilter>(() =>
+    getStoredValue<AccountStatusFilter>(STORAGE_KEYS.status, DEFAULT_ACCOUNT_STATUS_FILTER)
   );
-  const [filterStatus, setFilterStatus] = useState<'active' | 'closed' | ''>(() =>
-    getStoredValue<'active' | 'closed' | ''>(STORAGE_KEYS.status, '')
-  );
-  const [filterNetWorth, setFilterNetWorth] = useState<'included' | 'excluded' | ''>(() =>
-    getStoredValue<'included' | 'excluded' | ''>(STORAGE_KEYS.netWorth, '')
+  const chooseStatus = useCallback((status: AccountStatusFilter) => {
+    setFilterStatus(status);
+    localStorage.setItem(STORAGE_KEYS.status, JSON.stringify(status));
+  }, []);
+  const [filterNetWorth, setFilterNetWorth] = useState<AccountNetWorthFilter>(() =>
+    getStoredValue<AccountNetWorthFilter>(STORAGE_KEYS.netWorth, '')
   );
   // Joint filter: '' = all, 'joint' = only accounts shared TO the caller.
   // Only offered when at least one joint row is present (conditional-filter
   // precedent: the net-worth filter below).
-  const [filterJoint, setFilterJoint] = useState<'joint' | ''>(() =>
-    getStoredValue<'joint' | ''>(STORAGE_KEYS.joint, '')
+  const [filterJoint, setFilterJoint] = useState<AccountJointFilter>(() =>
+    getStoredValue<AccountJointFilter>(STORAGE_KEYS.joint, '')
   );
   // Account-type filter: an empty list means "all types". Persisted so the
   // chosen types survive navigating away and back to the page.
@@ -302,14 +330,6 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
   }, []);
 
   // Persist filter/sort changes to localStorage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.showFilters, JSON.stringify(showFilters));
-  }, [showFilters]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.status, JSON.stringify(filterStatus));
-  }, [filterStatus]);
-
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.netWorth, JSON.stringify(filterNetWorth));
   }, [filterNetWorth]);
@@ -420,8 +440,9 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
       marketValues: brokerageMarketValues ?? new Map(),
       unpricedCounts: unpricedHoldingCounts ?? new Map(),
       incompleteAccountIds: incompleteHoldingAccountIds,
+      positionCounts: heldPositionCounts,
     });
-  }, [accounts, favOverrides, stripAccountName, brokerageMarketValues, unpricedHoldingCounts, incompleteHoldingAccountIds]);
+  }, [accounts, favOverrides, stripAccountName, brokerageMarketValues, unpricedHoldingCounts, incompleteHoldingAccountIds, heldPositionCounts]);
 
   // The segments' counts are over every account, as on Currencies, so a
   // segment says how many it holds before any other filter narrows it.
@@ -674,7 +695,7 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
   };
 
   const clearFilters = () => {
-    setFilterStatus('');
+    setFilterStatus(DEFAULT_ACCOUNT_STATUS_FILTER);
     setFilterNetWorth('');
     setFilterJoint('');
     setFilterTypes([]);
@@ -827,105 +848,26 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
 
   return (
     <div>
-      {/* Status segmented control */}
-      <div className="px-3 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            {/* Search first, then the status segments with their counts, then
-                the narrower filters: the list page's toolbar order. */}
-            <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-3">
-              {/* Free-text name filter */}
-              <div className="relative w-full sm:w-52">
-                <input
-                  type="text"
-                  value={filterSearch}
-                  onChange={(e) => setFilterSearch(e.target.value)}
-                  placeholder={t('list.filter.searchPlaceholder')}
-                  aria-label={t('list.filter.searchAriaLabel')}
-                  className="w-full text-sm font-sans border border-gray-300 dark:border-gray-600 rounded-md pl-3 pr-8 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 dark:placeholder-gray-400"
-                />
-                {filterSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setFilterSearch('')}
-                    aria-label={t('list.filter.searchClear')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                  >
-                    <XMarkIcon className="w-4 h-4" aria-hidden="true" />
-                  </button>
-                )}
-              </div>
-
-              {/* Status segmented control */}
-              <div role="group" aria-label={t('list.filter.statusLabel')} className={SEGMENTED_GROUP_CLASS}>
-                {(
-                  [
-                    ['', t('list.filter.allCount', { count: statusCounts.all })],
-                    ['active', t('list.filter.activeCount', { count: statusCounts.active })],
-                    ['closed', t('list.filter.closedCount', { count: statusCounts.closed })],
-                  ] as const
-                ).map(([status, label]) => (
-                  <button
-                    key={status || 'all'}
-                    type="button"
-                    onClick={() => setFilterStatus(status)}
-                    aria-pressed={filterStatus === status}
-                    className={segmentClass(filterStatus === status)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Account-type filter (multi-select) */}
-              <div className="w-full sm:w-52">
-                <MultiSelect
-                  ariaLabel={t('list.filter.typeAriaLabel')}
-                  options={typeOptions}
-                  value={filterTypes}
-                  onChange={(vals) => setFilterTypes(vals as AccountGroupType[])}
-                  placeholder={t('list.filter.typePlaceholder')}
-                />
-              </div>
-
-              {/* Net Worth filter -- only shown when at least one account is excluded */}
-              {hasExcludedAccounts && (
-                <select
-                  value={filterNetWorth}
-                  onChange={(e) => setFilterNetWorth(e.target.value as 'included' | 'excluded' | '')}
-                  className="text-sm font-sans border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 min-w-[16rem]"
-                >
-                  <option value="">{t('list.filter.netWorthAll')}</option>
-                  <option value="included">
-                    {t('list.filter.inNetWorth')}
-                  </option>
-                  <option value="excluded">
-                    {t('list.filter.excludedFromNetWorth')}
-                  </option>
-                </select>
-              )}
-
-              {/* Joint filter -- only shown when something is shared to the
-                  caller. The switch and its text are siblings, not nested:
-                  ToggleSwitch is a <button>, which a <label> cannot label. */}
-              {hasJointAccounts && (
-                <div className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  <ToggleSwitch
-                    size="sm"
-                    checked={filterJoint === 'joint'}
-                    onChange={(v) => setFilterJoint(v ? 'joint' : '')}
-                    label={t('list.filterJoint')}
-                  />
-                  <span>{t('list.filterJoint')}</span>
-                </div>
-              )}
-            </div>
-          </div>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            {t('list.accountCount', { filtered: filteredAndSortedAccounts.length, total: logicalAccounts.length })}
-          </span>
-        </div>
-      </div>
+      <AccountFilterPanel
+        expanded={filtersExpanded}
+        setExpanded={setFiltersExpanded}
+        search={filterSearch}
+        setSearch={setFilterSearch}
+        status={filterStatus}
+        setStatus={chooseStatus}
+        statusCounts={statusCounts}
+        types={filterTypes}
+        setTypes={(vals) => setFilterTypes(vals as AccountGroupType[])}
+        typeOptions={typeOptions}
+        netWorth={filterNetWorth}
+        setNetWorth={setFilterNetWorth}
+        showNetWorth={hasExcludedAccounts}
+        joint={filterJoint}
+        setJoint={setFilterJoint}
+        showJoint={hasJointAccounts}
+        countLabel={t('list.accountCount', { filtered: filteredAndSortedAccounts.length, total: logicalAccounts.length })}
+        onClear={clearFilters}
+      />
 
       {filteredAndSortedAccounts.length === 0 ? (
         <EmptyState
@@ -1210,14 +1152,24 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
       <ConfirmDialog
         isOpen={closeDialogOpen}
         title={t('confirmDialog.closeTitle')}
-        message={accountToClose
-          ? t('confirmDialog.closeMessage', {
-              name:
-                logicalById.get(accountToClose.id)?.displayName ??
-                accountToClose.name,
-            })
-          : ''
-        }
+        message={(() => {
+          if (!accountToClose) return '';
+          const logical = logicalById.get(accountToClose.id);
+          const name = logical?.displayName ?? accountToClose.name;
+          // The cash a close leaves behind stays in the account, frozen, and
+          // keeps counting unless the account is excluded from net worth --
+          // which cannot be changed once it is closed, so the dialog says so
+          // while it still can be.
+          // The balance and its exclusion flag are the cash ledger's: the two
+          // halves of a pair carry their own flags.
+          const cashLedger = logical?.cash ?? accountToClose;
+          const rounded = roundMoney(ownBalance(cashLedger), moneyDecimalsForCurrency(cashLedger.currencyCode));
+          if (rounded === 0) return t('confirmDialog.closeMessage', { name });
+          const balance = formatCurrencyBase(rounded, cashLedger.currencyCode);
+          return cashLedger.excludeFromNetWorth
+            ? t('confirmDialog.closeMessageWithBalanceExcluded', { name, balance })
+            : t('confirmDialog.closeMessageWithBalance', { name, balance });
+        })()}
         confirmLabel={isClosing ? t('confirmDialog.closeConfirmLoading') : t('confirmDialog.closeConfirm')}
         cancelLabel={tc('cancel')}
         variant="warning"

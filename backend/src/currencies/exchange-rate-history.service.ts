@@ -74,13 +74,17 @@ export interface RateCoverage {
 /**
  * The most dates one listing returns, newest first.
  *
- * Roughly eight years of daily observations. The listing is a scrollable panel
- * in a dialog, not an export, so it is bounded; what the bound leaves out is
- * reported (`truncated`) rather than quietly dropped, and `getCoverage` still
- * answers over every stored row, so the span a reader is told about is never
- * the capped one.
+ * Roughly fifty-five years of daily observations, weekends included, or
+ * about seventy-six of weekdays: Frankfurter's history for USD/CAD starts in
+ * 1953 and its adapter stores weekdays only (18,970 rows to 2026), so
+ * the currency detail page's chart and table cover every period it offers. It
+ * used to be 2000, about eight years of weekday rates, which cut every period
+ * off in 2019 (issue #2245). It is still a bound, because a request is: what
+ * the bound leaves out is reported (`truncated`) rather than quietly dropped,
+ * and `getCoverage` still answers over every stored row, so the span a reader
+ * is told about is never the capped one.
  */
-export const STORED_RATE_ROW_CAP = 2000;
+export const STORED_RATE_ROW_CAP = 20_000;
 
 /** One stored observation, stated in the direction the reader asked about. */
 export interface StoredRate {
@@ -214,7 +218,7 @@ export class ExchangeRateHistoryService {
    * and not a guard, in the category `history-fill.ts` describes: losing an
    * entry costs a round trip and changes no row. It needs no provider-chain
    * scoping of its own: the chain is fixed for the life of the process, and
-   * changing `FX_PROVIDERS` takes a restart, which starts this memory empty.
+   * changing it takes a new release, whose restart starts this memory empty.
    * What the chain cannot see change is a coin's price symbol, so a pair the
    * chain reports uncarried is never remembered here, and a new symbol drops
    * the code's entries (`forgetEmptyWindowsFor`).
@@ -569,7 +573,7 @@ export class ExchangeRateHistoryService {
    * The merge holds only within one provider chain. A row recorded under a
    * different chain (or none) has its three dates **replaced** by this write's,
    * and takes this chain's fingerprint: merging would carry the stale floor
-   * straight through the first write after a change to `FX_PROVIDERS`.
+   * straight through the first write after the chain changes.
    * `IS DISTINCT FROM` is what makes a `NULL` fingerprint count as different.
    */
   private async recordPairCoverage(

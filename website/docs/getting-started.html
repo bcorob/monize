@@ -66,6 +66,25 @@ if you want to move to the new name.</p>
 </aside>
 <p>Likewise, changing <code>JWT_SECRET</code> later signs everyone out, stops authenticator
 (two-factor) codes from working and forgets trusted devices.</p>
+<p>If you open Monize over plain HTTP, as in the <code>http://localhost:3001</code> address
+used below, also set:</p>
+<pre><code class="language-bash"># Required when Monize is reached over http:// rather than https://
+DISABLE_HTTPS_HEADERS=true
+</code></pre>
+<aside class="callout callout-important">
+<p class="callout-title">Important</p>
+<p><code>DISABLE_HTTPS_HEADERS</code> defaults to <code>false</code> in <code>docker-compose.prod.yml</code>, so
+Monize sends security headers and <code>Secure</code> cookies that only work over HTTPS.
+Over plain HTTP that shows an <strong>HTTPS Required</strong> banner, and when you reach
+Monize by anything other than <code>localhost</code> the browser will not keep the
+sign-in cookies, so you cannot sign in. Setting it to <code>true</code> drops the
+HTTPS-only headers (HSTS and COOP) and the <code>Secure</code> cookie flag
+(<a href="/docs/settings-and-security#plain-http-deployments">Plain HTTP Deployments</a>).
+Remove it again once Monize is served over HTTPS.</p>
+<p>Putting Monize behind a reverse proxy that serves HTTPS, such as
+<a href="https://traefik.io/traefik/" rel="noopener" class="ext">Traefik</a>, is the recommended way to run it, but
+setting one up is outside the scope of this documentation.</p>
+</aside>
 <ol start="3">
 <li>Start the application with the prebuilt images:</li>
 </ol>
@@ -76,7 +95,8 @@ images from source instead (for development), use <code>docker-compose.dev.yml</
 <ol start="4">
 <li>Open Monize at <code>http://localhost:3001</code> (the <code>FRONTEND_PORT</code> and
 <code>PUBLIC_APP_URL</code> settings in <code>.env</code>). If you reach it through a reverse proxy
-or another host name, set <code>PUBLIC_APP_URL</code> to that address.</li>
+or another host name, set <code>PUBLIC_APP_URL</code> to that address. Over <code>http://</code>,
+<code>DISABLE_HTTPS_HEADERS=true</code> must be set (step 2).</li>
 </ol>
 <h3 id="using-kubernetes-helm">Using Kubernetes (Helm)<a class="hlink" href="#using-kubernetes-helm" aria-label="Link to this section">#</a></h3>
 <p>Helm charts are provided in the <code>helm/</code> directory for Kubernetes deployments. Refer to the Helm README for detailed configuration options.</p>
@@ -179,7 +199,7 @@ administrator sees an extra <strong>Admin</strong> menu (see <a href="/docs/sett
 <li><strong>Settings</strong> -- The gear icon with your first name: preferences, security, two-factor authentication, trusted devices, sharing, backups and more</li>
 <li><strong>Logout</strong> -- Sign out of the application</li>
 </ul>
-<p>On a phone or tablet, a bar at the bottom of the screen replaces the menus. It holds up to three tabs of your choice (Home, Transactions and Accounts unless you change them in <a href="/docs/settings-and-security#preferences">Preferences</a>), a <strong>+</strong> button, and <strong>More</strong>, which opens a drawer with everything else, including Help, Settings and Logout. The <strong>+</strong> button does the page&#x27;s own main action: on Accounts it opens a new account, on Payees a new payee, on Bills &amp; Deposits a new scheduled transaction, and so on for Categories, Tags, Budgets, Investments, Securities, Currencies, Institutions, Reports, Rules, Warranties, Payroll Deductions and Shared Expenses (a new group, or a new person on the People tab). Everywhere else it opens a new transaction. As you scroll, the page title moves into the header at the top.</p>
+<p>On a phone or tablet, a bar at the bottom of the screen replaces the menus. It holds up to three tabs of your choice (Home, Transactions and Accounts unless you change them in <a href="/docs/settings-and-security#preferences">Preferences</a>), a <strong>+</strong> button, and <strong>More</strong>, which opens a drawer with everything else, including Help, Settings and Logout. The <strong>+</strong> button does the page&#x27;s own main action: on Accounts it opens a new account, on Payees a new payee, on Bills &amp; Deposits a new scheduled transaction, and so on for Categories, Tags, Budgets, Securities, Currencies, Institutions, Rules, Warranties, Payroll Deductions and Shared Expenses (a new group, or a new person on the People tab). On Investments it asks whether you want an investment or a cash transaction, and on Reports whether you want a standard or an investment report. Everywhere else it opens a new transaction. Because the <strong>+</strong> button is always there, Accounts, Transactions, Bills &amp; Deposits, Investments, Reports and Budgets do not repeat their <strong>New</strong> button at the top of the page on a phone or tablet. As you scroll, the page title moves into the header at the top.</p>
 <h3 id="getting-help-in-the-app">Getting Help in the App<a class="hlink" href="#getting-help-in-the-app" aria-label="Link to this section">#</a></h3>
 <p>Most pages carry a <strong>?</strong> icon beside their title. Click it and the matching part of this guide opens in a <strong>help panel</strong> at the right edge of the window, with the page you were on still beside it. On a phone the panel is a sheet that slides up from the bottom.</p>
 <p>The panel&#x27;s header has these controls:</p>

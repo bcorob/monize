@@ -23,6 +23,7 @@ const transactionRates: TransactionRate[] = [
     kind: 'foreignEntry',
     accountName: 'CAD Chequing',
     payeeName: 'Hotel',
+    marketRate: null,
   },
   {
     transactionId: 'tx-2',
@@ -32,6 +33,7 @@ const transactionRates: TransactionRate[] = [
     accountName: 'Euro Chequing',
     // A transfer leg's payee names the transfer, which the kind already says.
     payeeName: 'Transfer to CAD Chequing',
+    marketRate: null,
   },
 ];
 
@@ -77,6 +79,21 @@ describe('CurrencyRateTable', () => {
     expect(screen.getByRole('button', { name: 'Frankfurter (60)' })).toBeInTheDocument();
     // Nothing is in Other, so it is not offered.
     expect(screen.queryByRole('button', { name: /Other/ })).not.toBeInTheDocument();
+  });
+
+  it('labels a Frankfurter v2 row apart from v1 and counts both under the Frankfurter filter', () => {
+    const mixed = buildRateHistoryRows(
+      [
+        { rateDate: '1998-06-01', rate: 1.47, source: 'frankfurter_v2', inverted: false },
+        { rateDate: '1999-01-04', rate: 1.52, source: 'frankfurter', inverted: false },
+      ],
+      [],
+    );
+    render(<CurrencyRateTable code="USD" defaultCurrency="CAD" rows={mixed} />);
+
+    expect(screen.getByRole('button', { name: 'Frankfurter (2)' })).toBeInTheDocument();
+    expect(within(bodyRows()[0]).getByText('Frankfurter (ECB)')).toBeInTheDocument();
+    expect(within(bodyRows()[1]).getByText('Frankfurter (central banks)')).toBeInTheDocument();
   });
 
   it('sorts by any column, and remembers the choice', () => {
@@ -159,5 +176,22 @@ describe('CurrencyRateTable', () => {
     expect(
       screen.getByText('Showing the 2,000 most recent stored rates; older ones are not listed.'),
     ).toBeInTheDocument();
+  });
+
+  it('says an empty period is one, not a pair with no history', () => {
+    render(<CurrencyRateTable code="EUR" defaultCurrency="CAD" rows={[]} hasAnyRates />);
+
+    expect(screen.getByText('No exchange rates in this period')).toBeInTheDocument();
+    expect(screen.queryByText('No exchange rates yet')).not.toBeInTheDocument();
+  });
+
+  it('starts a new period from its first page', () => {
+    const { rerender } = render(<CurrencyRateTable code="EUR" defaultCurrency="CAD" rows={rows} />);
+    fireEvent.click(screen.getAllByTitle('Next page')[0]);
+    expect(bodyRows()).toHaveLength(13);
+
+    rerender(<CurrencyRateTable code="EUR" defaultCurrency="CAD" rows={rows.slice(0, 55)} />);
+
+    expect(bodyRows()).toHaveLength(50);
   });
 });

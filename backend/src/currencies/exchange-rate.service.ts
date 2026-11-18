@@ -21,6 +21,7 @@ import {
   RateIndex,
 } from "../common/time-series/rate-index.util";
 import { returnedRows } from "../common/db/query-result";
+import { accountCarriesBalanceSql } from "../accounts/account-carries-balance";
 import { withSystemContext, withUserContext } from "../common/db/with-context";
 import {
   FetchSyncJob,
@@ -195,9 +196,9 @@ export class ExchangeRateService implements OnModuleInit {
   constructor(
     private dataSource: DataSource,
     /**
-     * The configured exchange rate providers behind one door. Every provider
-     * question this service asks goes through here, so which provider answers
-     * is `FX_PROVIDERS`' decision and a stored row's `source` is the answering
+     * The exchange rate providers behind one door. Every provider question
+     * this service asks goes through here, so which provider answers is the
+     * chain's decision and a stored row's `source` is the answering
      * provider's own slug; nothing in this file names a provider (INV-FX-005).
      */
     private readonly fxProviders: FxProviderChain,
@@ -276,7 +277,7 @@ export class ExchangeRateService implements OnModuleInit {
              SELECT a.user_id
              FROM accounts a
              INNER JOIN user_preferences up ON up.user_id = a.user_id
-             WHERE a.is_closed = false
+             WHERE ${accountCarriesBalanceSql("a")}
                AND a.currency_code != up.default_currency
              UNION
              SELECT a.user_id
@@ -580,7 +581,7 @@ export class ExchangeRateService implements OnModuleInit {
     }> = await withScopedDb(this.dataSource, (manager) =>
       manager.query(
         `SELECT DISTINCT code, c.kind, c.quote_symbol AS "quoteSymbol" FROM (
-         SELECT currency_code AS code FROM accounts WHERE is_closed = false
+         SELECT currency_code AS code FROM accounts WHERE ${accountCarriesBalanceSql()}
          UNION
          SELECT s.currency_code AS code
          FROM securities s
@@ -642,8 +643,8 @@ export class ExchangeRateService implements OnModuleInit {
 
     /**
      * The coin side of a pair no provider carries because the coin has no
-     * price symbol: the repair is on the Currencies page, not in
-     * `FX_PROVIDERS` (spec section 7). `null` for any other uncarried pair.
+     * price symbol: the repair is on the Currencies page (spec section 7).
+     * `null` for any other uncarried pair.
      */
     const unmappedCoin = (base: string, quote: string): string | null =>
       [base, quote].find(
@@ -665,8 +666,8 @@ export class ExchangeRateService implements OnModuleInit {
           // Three reports with three repairs, kept apart: a quote no carrying
           // provider answered is an outage the next tick retries; one answered
           // without a rate resolves from the last admissible day or stays
-          // unknown, never at a guessed figure; a pair no configured provider
-          // carries is a fact about `FX_PROVIDERS` for the operator to act on.
+          // unknown, never at a guessed figure; a pair no provider carries is
+          // a currency no source quotes, reported as such.
           const coin = unmappedCoin(base, quote);
           const error = answer.unanswered.includes(quote)
             ? "No provider answered"
@@ -765,7 +766,7 @@ export class ExchangeRateService implements OnModuleInit {
               )::TEXT AS earliest
        FROM accounts a
        WHERE a.currency_code != $1
-         AND a.is_closed = false
+         AND ${accountCarriesBalanceSql("a")}
          ${accountFilter}`,
           params,
         );

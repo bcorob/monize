@@ -41,7 +41,7 @@ Monize supports 11 account types:
 ## Creating an Account
 
 1. Navigate to **Accounts** from the top navigation bar
-2. Click **+ New Account**
+2. Click **+ New Account** (on a phone or tablet, tap the **+** button in the bar at the bottom of the screen)
 3. Fill in the **New Account** form:
 
 ![The New Account form](images/create-account-form.png)
@@ -231,13 +231,15 @@ At the top of the accounts page, the summary shows:
 
 The three money figures leave out accounts you excluded from net worth.
 
+Click **Hide summary** above the cards to fold them away, leaving more of the screen for the list; **Show summary** brings them back. The choice is remembered in this browser.
+
 ### Filtering
 
-The filter bar above the list lets you narrow down which accounts are shown:
+The filters above the list narrow down which accounts are shown. On a phone, each filter takes the full width of the screen, and the panel can be folded away: tap **Hide** in its header to fold it to one line, and **Show filters** to open it again; the choice is remembered in this browser. While it is folded, the header counts the filters that apply, offers **Clear**, and shows each one as a chip you can remove with its **X**. On a wider screen the filters are always shown.
 
-- **Search** -- A text box that filters accounts by name as you type. Click the **X** inside the box to clear the search.
-- **Status** -- Switch between **All**, **Active**, and **Closed** accounts.
+- **Status** -- Switch between **All**, **Active**, and **Closed** accounts. The list opens on **Active**, so closed accounts stay out of the way until you ask for them; a status you pick is remembered, and **Clear** returns to **Active**.
 - **Account Type** -- Show only selected account types (e.g. only chequing and savings). It lists just the types you actually have; leaving it empty shows all types.
+- **Search** -- A text box that filters accounts by name as you type. Click the **X** inside the box to clear the search.
 - **Net Worth** -- Show the accounts included in or excluded from net worth (shown when you have excluded an account).
 - **Shared with me** -- Show only the [joint accounts](shared-access.md#joint-accounts) other people share with you (shown when you have any).
 
@@ -245,6 +247,8 @@ A counter beside the filters shows how many accounts match, in the form **"X of 
 
 > [!NOTE]
 > Your filter and row density choices are remembered between visits.
+
+When you leave the Accounts page and come back, by **Back** or by its tab, the list is drawn at once from what it last showed and refreshed underneath, and the page returns to where you had scrolled. The same is true of Transactions, Bills & Deposits, Investments, Reports and Budgets.
 
 ---
 
@@ -419,11 +423,17 @@ Click **Edit** on any account in the list, or **Edit Account** on its detail pag
 
 When an account is no longer active (e.g., you closed a bank account), you can close it in Monize:
 
-1. Make sure its balance is zero
-2. Click **Close** on the account in the list
-3. Confirm in the **Close Account** dialog
+1. Click **Close** on the account in the list
+2. Confirm in the **Close Account** dialog
 
-Closed accounts are hidden from transaction dropdowns and appear under the **Closed** filter, but their historical data is preserved for reporting. Click **Reopen** to make an account active again. Closing or reopening an investment account acts on both of its ledgers.
+An account does not have to be at zero to close. If it still has a balance (a few cents of interest you never moved, or an amount still owed on a card you cancelled), the dialog shows the balance. That balance stays in the closed account and keeps counting toward your net worth, the summary cards on the Accounts page and credit utilization. A closed card's credit limit no longer counts, so a balance still owed on it shows as fully used credit and raises your overall utilization. A closed account cannot be edited, so if you do not want its balance counted, edit the account and turn on **Exclude from net worth** before you close it. To change the balance later, reopen the account, record the transaction, and close it again.
+
+Two things still stop a close, because they would change the balance after the account is closed:
+
+- **Securities.** An investment account must hold no securities. Sell them or transfer them to another account first. Any cash left in the account can stay.
+- **Future-dated transactions.** A transaction dated after today would change the balance on that date. Delete or void it first.
+
+Closed accounts are hidden from transaction dropdowns and from the account list's default **Active** view, and appear under the **Closed** filter, but their historical data is preserved for reporting. Click **Reopen** to make an account active again. Closing or reopening an investment account acts on both of its ledgers.
 
 ### Deleting Accounts
 
