@@ -1,7 +1,7 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,6 +53,19 @@ function config(withCaddy, overrides = {}) {
     encoding: 'utf8',
   }));
 }
+
+test('Caddy documentation and hostname samples use reserved example domains', () => {
+  const guide = readFileSync(join(root, 'deploy', 'caddy', 'README.md'), 'utf8');
+  const envExample = readFileSync(join(root, '.env.example'), 'utf8');
+  const sample = envExample.match(/^# CADDY_DOMAIN=(\S+)$/m);
+  assert.ok(sample, 'The Caddy hostname sample must exist');
+  const domains = guide.match(/\b(?:[a-z0-9_-]+\.)+(?:com|net|org)\b/gi) ?? [];
+  assert.ok(domains.length > 0, 'The Caddy guide must include example domains');
+  for (const domain of [...domains, sample[1]]) {
+    assert.match(domain, /^(?:[a-z0-9_-]+\.)*example\.(?:com|net|org)$/i,
+      'Use reserved example domains, not deployment hostnames');
+  }
+});
 
 test('the production stack keeps its direct frontend port without Caddy', () => {
   const { services } = config(false);

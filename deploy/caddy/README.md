@@ -17,10 +17,13 @@ The production stack without the overlay is unchanged.
   (1.1.1.1 and 8.8.8.8). Those resolvers let Caddy check public TXT records even
   when the LAN has a private DNS override for the app's hostname.
 
-DNS validation does not require inbound Internet access. For `monize.corob.net`,
+The examples use `money.example.com` in the reserved `example.com` zone;
+substitute a domain you control in the DNS instructions, IAM policy and settings.
+
+DNS validation does not require inbound Internet access. For `money.example.com`,
 configure your LAN DNS to resolve that name to the Docker host's LAN IP. No
 public A/AAAA record or router port forwarding is required. Caddy creates and
-removes `_acme-challenge.monize.corob.net` TXT records in the public `corob.net`
+removes `_acme-challenge.money.example.com` TXT records in the public `example.com`
 zone. Public certificates disclose their names in Certificate Transparency logs.
 
 ## Route 53 permissions
@@ -58,7 +61,7 @@ one TXT name in one hosted zone.
         "ForAllValues:StringEquals": {
           "route53:ChangeResourceRecordSetsRecordTypes": ["TXT"],
           "route53:ChangeResourceRecordSetsNormalizedRecordNames": [
-            "_acme-challenge.monize.corob.net"
+            "_acme-challenge.money.example.com"
           ]
         }
       }
@@ -73,7 +76,7 @@ In the deployment's existing `.env`, add the following values. Keep its database
 JWT, encryption and other application settings unchanged.
 
 ```dotenv
-CADDY_DOMAIN=monize.corob.net
+CADDY_DOMAIN=money.example.com
 CADDY_ROUTE53_HOSTED_ZONE_ID=YOUR_PUBLIC_ZONE_ID
 CADDY_AWS_ACCESS_KEY_ID=YOUR_DEDICATED_ACCESS_KEY
 CADDY_AWS_SECRET_ACCESS_KEY=YOUR_DEDICATED_SECRET
@@ -81,7 +84,7 @@ CADDY_AWS_REGION=us-east-1
 ```
 
 Use the bare hostname for `CADDY_DOMAIN`, without a scheme, port or path. The
-overlay sets `PUBLIC_APP_URL` and `CORS_ORIGIN` to `https://monize.corob.net`
+overlay sets `PUBLIC_APP_URL` and `CORS_ORIGIN` to `https://money.example.com`
 inside both relevant services and forces HTTPS headers and secure cookies on.
 One trusted proxy hop matches Caddy's forwarded client address; the frontend
 does not trust an arbitrary client-supplied `X-Real-IP`.
@@ -104,7 +107,7 @@ Use **both** Compose files for subsequent updates, restarts and shutdowns. The
 overlay removes the frontend's published HTTP port with `!reset []`; publishing
 it alongside Caddy would allow direct access around TLS termination.
 
-Open `https://monize.corob.net` after certificate issuance succeeds. HTTP on port
+Open `https://money.example.com` after certificate issuance succeeds. HTTP on port
 80 redirects to HTTPS. For an OIDC deployment, update the provider's registered
 callback URL and `OIDC_CALLBACK_URL` to the new HTTPS origin.
 
